@@ -1,7 +1,7 @@
 """
 Homework 1: Sentiment Analysis with Transformer Models
 =======================================================
-This script fine-tunes BERT (encoder) and GPT-1 (decoder) on the SST-2 dataset,
+This script fine-tunes BERT (encoder) and GPT-1 (decoder) on the IMDB dataset,
 evaluates both, and prints a side-by-side comparison.
 """
 
@@ -12,7 +12,7 @@ from training.train_gpt import train_gpt
 def compare_models(bert_metrics, gpt_metrics):
     """Print a side-by-side comparison table."""
     print("\n" + "=" * 62)
-    print("  MODEL COMPARISON — BERT vs GPT-1 on SST-2")
+    print("  MODEL COMPARISON — BERT vs GPT-1 on IMDB")
     print("=" * 62)
     header = f"  {'Metric':<12} {'BERT':>10} {'GPT-1':>10} {'Δ (BERT-GPT)':>14}"
     print(header)
@@ -51,12 +51,12 @@ def compare_models(bert_metrics, gpt_metrics):
 
 def main():
     print("=" * 62)
-    print("  PHASE 1: Fine-tuning BERT on SST-2")
+    print("  PHASE 1: Fine-tuning BERT on IMDB")
     print("=" * 62)
     bert_metrics = train_bert()
 
     print("\n" + "=" * 62)
-    print("  PHASE 2: Fine-tuning GPT-1 on SST-2")
+    print("  PHASE 2: Fine-tuning GPT-1 on IMDB")
     print("=" * 62)
     gpt_metrics = train_gpt()
 

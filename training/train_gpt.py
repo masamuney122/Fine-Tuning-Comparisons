@@ -5,14 +5,14 @@ from torch.optim import AdamW
 from transformers import get_linear_schedule_with_warmup
 
 from models.gpt_model import get_gpt_model_and_tokenizer
-from utils.dataset_loader import load_sst2_dataset, tokenize_for_gpt
+from utils.dataset_loader import load_imdb_dataset, tokenize_for_gpt
 from utils.metrics import compute_metrics, print_metrics
 
 # ── Training Configuration ──────────────────────────────────────────
 LEARNING_RATE = 6.25e-5
-BATCH_SIZE = 32
+BATCH_SIZE = 16
 EPOCHS = 3
-MAX_LENGTH = 128
+MAX_LENGTH = 256
 WARMUP_RATIO = 0.1
 # ────────────────────────────────────────────────────────────────────
 
@@ -41,7 +41,7 @@ def train_gpt():
     print(f"\n[GPT-1] Using device: {device}")
 
     # ── Data ────────────────────────────────────────────────────────
-    train_data, val_data, test_data = load_sst2_dataset()
+    train_data, val_data, test_data = load_imdb_dataset()
     model, tokenizer = get_gpt_model_and_tokenizer(num_labels=2)
 
     train_dataset = tokenize_for_gpt(train_data, tokenizer, MAX_LENGTH)

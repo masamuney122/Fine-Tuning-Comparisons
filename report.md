@@ -4,19 +4,19 @@
 
 | Property | Value |
 |---|---|
-| **Dataset** | SST-2 (Stanford Sentiment Treebank — Binary) |
-| **Source** | Socher et al., 2013 — *Recursive Deep Models for Semantic Compositionality Over a Sentiment Treebank*. Available through the GLUE benchmark (`glue/sst2` on Hugging Face). |
-| **Number of Samples** | 68,221 total (67,349 train + 872 validation) |
-| **Label Classes** | Binary — `0` (negative), `1` (positive) |
-| **Split** | Train: 67,349 / Validation: 436 / Test: 436 (validation split 50/50 because the official test labels are hidden) |
+| **Dataset** | IMDB Movie Reviews (50K) |
+| **Source** | Maas et al., 2011 — *Learning Word Vectors for Sentiment Analysis*. https://ai.stanford.edu/~amaas/data/sentiment/ |
+| **Number of Samples** | 50,000 total |
+| **Label Classes** | Binary — `0` (negative), `1` (positive) — balanced (25K each) |
+| **Split** | Train: 40,000 / Validation: 5,000 / Test: 5,000 (stratified 80/10/10 split) |
 
 ### Example Records
 
-| Label | Sentence |
+| Label | Review (truncated) |
 |---|---|
-| Positive (1) | "the rock is destined to be the 21st century 's new conan and that he 's going to make a splash..." |
-| Negative (0) | "simplistic , silly and tedious ." |
-| Positive (1) | "it 's a charming and often affecting journey ." |
+| Positive (1) | "One of the other reviewers has mentioned that after watching just 1 Oz episode you'll be hooked. They are right, as this is exactly what happened with me..." |
+| Negative (0) | "Basically there's a family where a little boy (Jake) thinks there's a zombie in his closet & his parents are fighting all the time. This movie is slower than a soap opera..." |
+| Positive (1) | "A wonderful little production. The filming technique is very unassuming — very old-time-BBC fashion and gives a comforting sense of realism to the entire piece..." |
 
 ---
 
@@ -38,9 +38,9 @@ BERT (Bidirectional Encoder Representations from Transformers) is an encoder-onl
 |---|---|
 | Optimizer | AdamW (weight decay = 0.01) |
 | Learning Rate | 2 × 10⁻⁵ |
-| Batch Size | 32 |
+| Batch Size | 16 |
 | Epochs | 3 |
-| Max Sequence Length | 128 |
+| Max Sequence Length | 256 |
 | Scheduler | Linear warmup (10% of steps) + linear decay |
 | Gradient Clipping | max norm = 1.0 |
 
@@ -76,9 +76,9 @@ GPT-1 (Radford et al., 2018) is a decoder-only transformer pretrained with autor
 |---|---|
 | Optimizer | AdamW (weight decay = 0.01) |
 | Learning Rate | 6.25 × 10⁻⁵ |
-| Batch Size | 32 |
+| Batch Size | 16 |
 | Epochs | 3 |
-| Max Sequence Length | 128 |
+| Max Sequence Length | 256 |
 | Scheduler | Linear warmup (10%) + linear decay |
 | Gradient Clipping | max norm = 1.0 |
 
@@ -114,7 +114,7 @@ GPT-1 (Radford et al., 2018) is a decoder-only transformer pretrained with autor
 
 ### Performance Differences
 
-BERT is expected to outperform GPT-1 on SST-2 because:
+BERT is expected to outperform GPT-1 on IMDB because:
 1. **Bidirectional context**: BERT attends to the full input simultaneously, which produces richer sentence representations for classification.
 2. **[CLS] token design**: BERT's `[CLS]` token at the start is specifically trained (via NSP) to capture sentence-level semantics.
 3. **Task alignment**: Classification requires understanding the entire sentence holistically — bidirectional attention is a natural fit.

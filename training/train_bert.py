@@ -5,14 +5,14 @@ from torch.optim import AdamW
 from transformers import get_linear_schedule_with_warmup
 
 from models.bert_model import get_bert_model_and_tokenizer
-from utils.dataset_loader import load_sst2_dataset, tokenize_for_bert
+from utils.dataset_loader import load_imdb_dataset, tokenize_for_bert
 from utils.metrics import compute_metrics, print_metrics
 
 # ── Training Configuration ──────────────────────────────────────────
 LEARNING_RATE = 2e-5
-BATCH_SIZE = 32
+BATCH_SIZE = 16
 EPOCHS = 3
-MAX_LENGTH = 128
+MAX_LENGTH = 256
 WARMUP_RATIO = 0.1
 # ────────────────────────────────────────────────────────────────────
 
@@ -22,7 +22,7 @@ def train_bert():
     print(f"\n[BERT] Using device: {device}")
 
     # ── Data ────────────────────────────────────────────────────────
-    train_data, val_data, test_data = load_sst2_dataset()
+    train_data, val_data, test_data = load_imdb_dataset()
     model, tokenizer = get_bert_model_and_tokenizer(num_labels=2)
 
     train_dataset = tokenize_for_bert(train_data, tokenizer, MAX_LENGTH)

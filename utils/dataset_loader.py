@@ -1,31 +1,45 @@
 import os
-from datasets import load_dataset
+import re
+import pandas as pd
+from datasets import Dataset
+from sklearn.model_selection import train_test_split
+
+DATA_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "IMDB Dataset.csv")
 
 
-def load_sst2_dataset():
+def _clean_html(text):
+    """Strip HTML tags like <br /> from review text."""
+    return re.sub(r"<[^>]+>", " ", text).strip()
+
+
+def load_imdb_dataset():
     """
-    Load the SST-2 (Stanford Sentiment Treebank, binary) dataset.
+    Load the IMDB Movie Reviews dataset from a local CSV file.
 
-    SST-2 is a binary sentiment classification dataset from the GLUE benchmark.
-    - Source: Socher et al., 2013 — "Recursive Deep Models for Semantic Compositionality
-      Over a Sentiment Treebank" (https://nlp.stanford.edu/sentiment/)
-    - Available via Hugging Face: glue/sst2
-    - Labels: 0 = negative, 1 = positive
-    - Train: 67,349 samples | Validation: 872 samples
-    - The official test set has hidden labels, so we split validation into val + test.
+    Dataset: IMDB 50K Movie Reviews
+    - Source: Maas et al., 2011 — "Learning Word Vectors for Sentiment Analysis"
+              https://ai.stanford.edu/~amaas/data/sentiment/
+    - Labels: "positive" / "negative" → mapped to 1 / 0
+    - Total: 50,000 reviews (balanced: 25K positive, 25K negative)
+    - Split: 40,000 train / 5,000 validation / 5,000 test
     """
-    dataset = load_dataset("glue", "sst2")
+    df = pd.read_csv(DATA_PATH)
 
-    train_dataset = dataset["train"]
+    df["text"] = df["review"].apply(_clean_html)
+    df["label"] = df["sentiment"].map({"positive": 1, "negative": 0})
+    df = df[["text", "label"]]
 
-    val_test = dataset["validation"].train_test_split(test_size=0.5, seed=42)
-    val_dataset = val_test["train"]
-    test_dataset = val_test["test"]
+    train_df, temp_df = train_test_split(df, test_size=0.2, random_state=42, stratify=df["label"])
+    val_df, test_df = train_test_split(temp_df, test_size=0.5, random_state=42, stratify=temp_df["label"])
+
+    train_dataset = Dataset.from_pandas(train_df.reset_index(drop=True))
+    val_dataset = Dataset.from_pandas(val_df.reset_index(drop=True))
+    test_dataset = Dataset.from_pandas(test_df.reset_index(drop=True))
 
     print("=" * 60)
-    print("DATASET: SST-2 (Stanford Sentiment Treebank — Binary)")
+    print("DATASET: IMDB Movie Reviews (50K)")
     print("=" * 60)
-    print(f"  Source      : GLUE benchmark / Socher et al. 2013")
+    print(f"  Source      : Maas et al. 2011 / Kaggle IMDB 50K")
     print(f"  Labels      : 0 (negative), 1 (positive)")
     print(f"  Train       : {len(train_dataset)} samples")
     print(f"  Validation  : {len(val_dataset)} samples")
@@ -34,18 +48,18 @@ def load_sst2_dataset():
     print("Example records:")
     for i in range(min(3, len(train_dataset))):
         label_str = "positive" if train_dataset[i]["label"] == 1 else "negative"
-        print(f"  [{label_str}] {train_dataset[i]['sentence'][:100]}")
+        print(f"  [{label_str}] {train_dataset[i]['text'][:120]}...")
     print("=" * 60)
 
     return train_dataset, val_dataset, test_dataset
 
 
-def tokenize_for_bert(dataset, tokenizer, max_length=128):
+def tokenize_for_bert(dataset, tokenizer, max_length=256):
     """Tokenize a dataset for BERT."""
 
     def tokenize_fn(examples):
         return tokenizer(
-            examples["sentence"],
+            examples["text"],
             padding="max_length",
             truncation=True,
             max_length=max_length,
@@ -57,11 +71,11 @@ def tokenize_for_bert(dataset, tokenizer, max_length=128):
     return tokenized
 
 
-def tokenize_for_gpt(dataset, tokenizer, max_length=128):
+def tokenize_for_gpt(dataset, tokenizer, max_length=256):
     """
     Tokenize a dataset for GPT-1 (openai-gpt).
     GPT-1 uses the last non-pad token representation for classification.
-    We structure the input as: <sentence> <cls_token>
+    Input structure: <review text> [CLS]
     """
     if tokenizer.pad_token is None:
         tokenizer.add_special_tokens({"pad_token": "[PAD]"})
@@ -71,7 +85,7 @@ def tokenize_for_gpt(dataset, tokenizer, max_length=128):
     cls_token = tokenizer.cls_token
 
     def tokenize_fn(examples):
-        texts = [sent + " " + cls_token for sent in examples["sentence"]]
+        texts = [t + " " + cls_token for t in examples["text"]]
         encoded = tokenizer(
             texts,
             padding="max_length",

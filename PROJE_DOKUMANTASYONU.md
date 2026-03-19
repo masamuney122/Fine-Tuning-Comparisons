@@ -97,61 +97,60 @@ accelerate
 
 ## 4. Part 1 — Veri Seti Secimi ve Yuklenmesi
 
-### Secilen Veri Seti: SST-2
+### Secilen Veri Seti: IMDB Movie Reviews
 
-**SST-2 (Stanford Sentiment Treebank — Binary)** veri seti secilmistir. Bu veri seti, NLP alanindaki en yaygin duygu analizi benchmark'larindan biridir.
+**IMDB Movie Reviews (50K)** veri seti secilmistir. Bu veri seti, NLP alanindaki en yaygin duygu analizi benchmark'larindan biridir.
 
 | Ozellik | Deger |
 |---|---|
-| **Ad** | SST-2 (Stanford Sentiment Treebank — Binary) |
-| **Kaynak** | Socher et al., 2013 — *"Recursive Deep Models for Semantic Compositionality Over a Sentiment Treebank"* |
-| **Erisim** | GLUE benchmark uzerinden — Hugging Face'te `glue/sst2` |
-| **Toplam Ornek** | 68,221 (67,349 egitim + 872 dogrulama) |
-| **Etiketler** | Binary — `0` (negatif), `1` (pozitif) |
-| **Bolme** | Train: 67,349 / Validation: 436 / Test: 436 |
+| **Ad** | IMDB Movie Reviews (50K) |
+| **Kaynak** | Maas et al., 2011 — *"Learning Word Vectors for Sentiment Analysis"* |
+| **Erisim** | Lokal CSV dosyasi (`IMDB Dataset.csv`) |
+| **Toplam Ornek** | 50,000 (dengeli: 25K pozitif, 25K negatif) |
+| **Etiketler** | Binary — `0` (negatif / "negative"), `1` (pozitif / "positive") |
+| **Bolme** | Train: 40,000 / Validation: 5,000 / Test: 5,000 (stratified %80/%10/%10) |
 
-### Neden SST-2?
+### Neden IMDB?
 
-1. NLP alaninda standart bir benchmark'tir
-2. GLUE benchmark suitinin parcasidir
-3. Binary siniflandirma oldugu icin model karsilastirmasi kolaydir
-4. Hugging Face uzerinden tek satirla yuklenebilir
+1. NLP alaninda en bilinen duygu analizi veri setlerinden biridir
+2. Dengeli dagılım (25K pozitif, 25K negatif) adil degerlendirme saglar
+3. Uzun review'lar modelin anlama kapasitesini test eder
+4. Binary siniflandirma oldugu icin model karsilastirmasi kolaydir
 
 ### Kod Aciklamasi: `utils/dataset_loader.py`
 
 Bu dosya uc ana fonksiyon icerir:
 
-#### 1. `load_sst2_dataset()` — Veri Setini Yukleme
+#### 1. `load_imdb_dataset()` — Veri Setini Yukleme
 
 ```python
-dataset = load_dataset("glue", "sst2")
+df = pd.read_csv(DATA_PATH)
+df["text"] = df["review"].apply(_clean_html)
+df["label"] = df["sentiment"].map({"positive": 1, "negative": 0})
 ```
 
-Bu tek satirla Hugging Face Hub'dan SST-2 veri seti indirilir. Veri seti 3 bolume sahiptir: `train`, `validation` ve `test`. Ancak resmi test setinin etiketleri gizlidir (-1 olarak isaretlenmistir), bu yuzden biz **validation setini ikiye boluyoruz**:
+Lokal `IMDB Dataset.csv` dosyasi pandas ile okunur. Ardindan:
+1. **HTML temizligi**: Review'lardaki `<br />` gibi HTML tag'leri `_clean_html()` fonksiyonu ile kaldirilir
+2. **Label donusumu**: "positive"/"negative" string degerleri 1/0 tamsayilara cevirilir
+
+Veri seti stratified (katmanli) olarak bolunur:
 
 ```python
-val_test = dataset["validation"].train_test_split(test_size=0.5, seed=42)
-val_dataset = val_test["train"]    # 436 ornek — dogrulama icin
-test_dataset = val_test["test"]    # 436 ornek — test icin
+train_df, temp_df = train_test_split(df, test_size=0.2, random_state=42, stratify=df["label"])
+val_df, test_df = train_test_split(temp_df, test_size=0.5, random_state=42, stratify=temp_df["label"])
 ```
 
-`seed=42` kullanarak bolmenin her calistirmada ayni olmasi saglanir (tekrarlanabilirlik).
-
-Fonksiyon ayrica veri setinin istatistiklerini ve ornek kayitlari ekrana yazdirir:
-
-```python
-print(f"  Train       : {len(train_dataset)} samples")
-print(f"  Validation  : {len(val_dataset)} samples")
-print(f"  Test        : {len(test_dataset)} samples")
-```
+- `stratify=df["label"]`: Her bolumde pozitif/negatif oraninin ayni kalmasini saglar
+- `random_state=42`: Tekrarlanabilirlik icin sabit seed
+- Sonuc: %80 train (40K), %10 val (5K), %10 test (5K)
 
 #### 2. `tokenize_for_bert()` — BERT icin Tokenizasyon
 
 ```python
-def tokenize_for_bert(dataset, tokenizer, max_length=128):
+def tokenize_for_bert(dataset, tokenizer, max_length=256):
     def tokenize_fn(examples):
         return tokenizer(
-            examples["sentence"],
+            examples["text"],
             padding="max_length",
             truncation=True,
             max_length=max_length,
@@ -164,12 +163,12 @@ def tokenize_for_bert(dataset, tokenizer, max_length=128):
 
 Bu fonksiyon ne yapar:
 
-1. **`tokenizer()`**: Her cumleyi BERT'in anlayacagi token ID'lerine donusturur. Ornegin `"this movie is great"` → `[101, 2023, 3185, 2003, 2307, 102, 0, 0, ...]`
+1. **`tokenizer()`**: Her review'u BERT'in anlayacagi token ID'lerine donusturur. Ornegin `"this movie is great"` → `[101, 2023, 3185, 2003, 2307, 102, 0, 0, ...]`
    - `101` = `[CLS]` token'i (cumle basinda)
    - `102` = `[SEP]` token'i (cumle sonunda)
    - `0` = `[PAD]` token'i (max uzunluga kadar doldurma)
-2. **`padding="max_length"`**: Tum cumleleri 128 token uzunluguna kadar pad'ler (sifirlarla doldurur)
-3. **`truncation=True`**: 128'den uzun cumleleri keser
+2. **`padding="max_length"`**: Tum review'lari 256 token uzunluguna kadar pad'ler (sifirlarla doldurur)
+3. **`truncation=True`**: 256'dan uzun review'lari keser
 4. **`rename_column("label", "labels")`**: Hugging Face modelleri `labels` sutun adini bekler
 5. **`set_format("torch")`**: Verileri PyTorch tensor formatina cevirir
 
@@ -258,9 +257,9 @@ WARMUP_RATIO = 0.1
 | Parametre | Deger | Aciklama |
 |---|---|---|
 | **Learning Rate** | 2×10⁻⁵ | BERT fine-tuning icin standart oran. Cok yuksek olursa onceden ogrenilen bilgi kaybolur (catastrophic forgetting). |
-| **Batch Size** | 32 | Her adimda 32 ornek islenir. |
+| **Batch Size** | 16 | Her adimda 16 ornek islenir. IMDB review'lari uzun oldugu icin bellek tasarrufu amaciyla 16 secilmistir. |
 | **Epochs** | 3 | Tum veri seti 3 kez gezilir. BERT fine-tuning icin 2-4 epoch yeterlidir. |
-| **Max Length** | 128 | Cumlelerin maksimum token uzunlugu. SST-2'deki cogu cumle 128'den kisadir. |
+| **Max Length** | 256 | Review'larin maksimum token uzunlugu. IMDB review'lari uzun oldugu icin 256 secilmistir. |
 | **Warmup Ratio** | 0.1 | Ilk %10 adimda learning rate sifirdan yavasce artar, sonra lineer olarak azalir. |
 
 #### Cihaz Secimi
@@ -452,6 +451,10 @@ LEARNING_RATE = 6.25e-5  # GPT-1 orijinal makalesindeki deger
 
 GPT-1 orijinal makalesinde fine-tuning icin 6.25×10⁻⁵ learning rate onerilmistir. Bu, BERT'in 2×10⁻⁵ degerinden yaklasik 3 kat daha yuksektir.
 
+#### Batch Size ve Max Length
+
+BERT ile ayni: `BATCH_SIZE=16`, `MAX_LENGTH=256`. IMDB review'lari uzun oldugu icin max_length 256'ya cikarilmis, GPU bellegini tasirmamak icin batch_size 16'ya dusurulmustur.
+
 #### Geri Kalan Yaklasim Ayni
 
 Egitim dongusu, optimizer (AdamW), scheduler (linear warmup), gradient clipping, validation ile model secimi ve test seti uzerinde nihai degerlendirme BERT ile birebir aynidir. Bu, adil bir karsilastirma yapabilmek icin onemlidir — iki model arasindaki tek fark **mimari** ve **learning rate** olmalidir.
@@ -593,10 +596,10 @@ python main.py
 
 Bu komut sirasiyla:
 
-1. SST-2 veri setini indirir
-2. BERT'i 3 epoch boyunca fine-tune eder
+1. IMDB veri setini lokal CSV'den yukler ve on-isler
+2. BERT'i 3 epoch boyunca GPU uzerinde fine-tune eder
 3. BERT'in test sonuclarini yazdirir
-4. GPT-1'i 3 epoch boyunca fine-tune eder
+4. GPT-1'i 3 epoch boyunca GPU uzerinde fine-tune eder
 5. GPT-1'in test sonuclarini yazdirir
 6. Iki modelin performansini yan yana karsilastirir
 
@@ -604,15 +607,15 @@ Bu komut sirasiyla:
 
 ```
 ==============================================================
-  PHASE 1: Fine-tuning BERT on SST-2
+  PHASE 1: Fine-tuning BERT on IMDB
 ==============================================================
-[BERT] Using device: cpu
+[BERT] Using device: cuda
 ============================================================
-DATASET: SST-2 (Stanford Sentiment Treebank — Binary)
+DATASET: IMDB Movie Reviews (50K)
 ============================================================
-  Train       : 67349 samples
-  Validation  : 436 samples
-  Test        : 436 samples
+  Train       : 40000 samples
+  Validation  : 5000 samples
+  Test        : 5000 samples
 ------------------------------------------------------------
   ...egitim ciktilari...
 
@@ -628,7 +631,7 @@ DATASET: SST-2 (Stanford Sentiment Treebank — Binary)
   ...ayni GPT-1 icin...
 
 ==============================================================
-  MODEL COMPARISON — BERT vs GPT-1 on SST-2
+  MODEL COMPARISON — BERT vs GPT-1 on IMDB
 ==============================================================
   Metric         BERT      GPT-1  Δ (BERT-GPT)
   ------------------------------------------------
@@ -641,9 +644,9 @@ DATASET: SST-2 (Stanford Sentiment Treebank — Binary)
 
 ### Notlar
 
-- **CPU'da calisma suresi**: GPU olmadan egitim 2-4 saat surebilir (BERT ~1-2 saat, GPT-1 ~1-2 saat)
-- **GPU ile**: NVIDIA GPU varsa otomatik olarak GPU kullanilir ve egitim 10-20 dakikaya duser
-- **Bellek**: BERT ve GPT-1 modelleri ~500MB RAM/VRAM kullanir
+- **GPU ile**: NVIDIA GPU otomatik olarak kullanilir (GTX 1060 6GB ile egitim ~20-40 dakika surer)
+- **CPU'da calisma suresi**: GPU olmadan egitim saatler surebilir
+- **Bellek**: BERT ve GPT-1 modelleri ~2-4GB VRAM kullanir (batch_size=16, max_length=256 ile)
 
 ---
 
